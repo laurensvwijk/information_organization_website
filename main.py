@@ -74,9 +74,9 @@ navbar = dbc.NavbarSimple(
         dbc.NavItem(dbc.NavLink("Page 2", href="#")),
         dbc.NavItem(dbc.NavLink("Page 3", href="#")),
     ],
-    brand=html.Img(src='/logo.svg', height="20px"),
+    brand="Amsterdam Subsidy Dashboard",
     brand_href="#",
-    color="primary",
+    color="#ec0000",
     dark=True,
 )
 
