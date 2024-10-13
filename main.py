@@ -6,6 +6,10 @@ import plotly.express as px
 import geopandas as gpd
 from shapely import wkt
 import json
+import pickle
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
+
 
 df = pd.read_csv('subsidie.csv')
 
@@ -53,6 +57,20 @@ year_options = [{'label': str(year), 'value': year} for year in unique_years]
 year_options.insert(0, {'label': 'Alle Jaren', 'value': 'all'})
 
 
+
+with open('rf_model.pkl', 'rb') as model_file:
+    model = pickle.load(model_file)
+
+with open('label_encoder_policy_area.pkl', 'rb') as file:
+    label_encoder_policy_area = pickle.load(file)
+
+with open('label_encoder_organizational_unit.pkl', 'rb') as file:
+    label_encoder_organizational_unit = pickle.load(file)
+
+with open('label_encoder_periodicity.pkl', 'rb') as file:
+    label_encoder_periodicity = pickle.load(file)
+
+
 def format_large_number(number):
     if number >= 1_000_000_000:
         return f"{number / 1_000_000_000:.2f} billion"
@@ -64,21 +82,41 @@ def format_large_number(number):
         return str(number)
 
 app = dash.Dash(
-    external_stylesheets=[dbc.themes.BOOTSTRAP]
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    suppress_callback_exceptions=True
 )
 
 # Define the Navbar
 navbar = dbc.NavbarSimple(
     children=[
-        dbc.NavItem(dbc.Button("Page 1", href="#", color="light")),
-        dbc.NavItem(dbc.NavLink("Page 2", href="#")),
-        dbc.NavItem(dbc.NavLink("Page 3", href="#")),
+        dbc.NavItem(dbc.Button("Dashboard", href="/", color="light")),  # Link to the dashboard ("/")
+        dbc.NavItem(dbc.Button("Subsidy Predictor", href="/predict", color="light")),  # Link to the prediction page ("/predict")
+        dbc.NavItem(dbc.Button("Page 3", href="/page3", color="light")),  # Link to Page 3 if needed
     ],
     brand="Amsterdam Subsidy Dashboard",
-    brand_href="#",
+    brand_href="/",  # Clicking on the brand also links to the dashboard ("/")
     color="#ec0000",
     dark=True,
 )
+app.layout = html.Div([
+    dcc.Location(id='url'),  # Keeps track of the URL
+    navbar,
+    html.Div(id='page-content')
+])
+
+@app.callback(
+    Output('page-content', 'children'),
+    [Input('url', 'pathname')]
+)
+def display_page(pathname):
+    if pathname == '/predict':
+        return prediction_layout  # Prediction layout for "/predict"
+    elif pathname == '/page3':
+        return page_3_layout  # Some other layout for "/page3"
+    else:
+        return dashboard_layout  # Default to the dashboard layout ("/")
+
+
 
 
 def create_card(p_text, h4_text):
@@ -271,6 +309,163 @@ def update_map(Year_selected):
     fig.update_layout(height=600)
 
     return fig
+
+# Dashboard layout
+dashboard_layout = dbc.Container([
+    dbc.Row([
+        dbc.Col("card", width=6),
+        dbc.Col(dbc.Stack([
+            html.Div(card_year),
+            html.Div(id='card-1-request'),
+        ], gap=3), width=3),
+        dbc.Col(dbc.Stack([
+            html.Div(id='card-2-approval'),
+            html.Div(id='card-3-grant'),
+        ], gap=3), width=3),
+    ], align="start", className="mb-4"),
+    dbc.Row([
+        dbc.Col(dcc.Graph(id="pie_right"), width=6),
+        dbc.Col(html.Div(id="table"), width=6),
+    ], align="start", className="mb-4"),
+    dbc.Row([
+        dbc.Col(dcc.Graph(id="choropleth-map"), width=8),
+        dbc.Col(['Bar Chart'], width=4),
+    ]),
+], className="p-5")
+
+
+
+# Prepare dropdown options
+policy_labels = label_encoder_policy_area.classes_
+policy_options = [{'label': label, 'value': label} for label in policy_labels]
+
+org_labels = label_encoder_organizational_unit.classes_
+org_options = [{'label': label, 'value': label} for label in org_labels]
+
+periodicity_labels = label_encoder_periodicity.classes_
+periodicity_options = [{'label': label, 'value': label} for label in periodicity_labels]
+
+# Prediction layout
+prediction_layout = dbc.Container([
+    html.H1("Subsidy Prediction", className="text-center my-4"),
+    dbc.Row([
+        dbc.Col([
+            dbc.Form([
+                dbc.Row([
+                    dbc.Label("Amount Requested (€)", html_for="amount-input", width=4),
+                    dbc.Col(
+                        dbc.Input(type="number", id="amount-input", placeholder="Enter amount"),
+                        width=8,
+                    ),
+                ], className="mb-3"),
+                dbc.Row([
+                    dbc.Label("Policy Area", html_for="policy-dropdown", width=4),
+                    dbc.Col(
+                        dcc.Dropdown(id="policy-dropdown", options=policy_options),
+                        width=8,
+                    ),
+                ], className="mb-3"),
+                dbc.Row([
+                    dbc.Label("Organizational Unit", html_for="org-dropdown", width=4),
+                    dbc.Col(
+                        dcc.Dropdown(id="org-dropdown", options=org_options),
+                        width=8,
+                    ),
+                ], className="mb-3"),
+                dbc.Row([
+                    dbc.Label("Periodicity Type", html_for="periodicity-dropdown", width=4),
+                    dbc.Col(
+                        dcc.Dropdown(id="periodicity-dropdown", options=periodicity_options),
+                        width=8,
+                    ),
+                ], className="mb-3"),
+                dbc.Button("Predict", color="primary", id="predict-button", className="mt-3"),
+            ]),
+        ], md=6),
+        dbc.Col([
+            html.Div(id="prediction-output", className="mt-4"),
+            html.Div(id="recommendation-output", className="mt-4")
+        ], md=6),
+    ]),
+])
+
+# Precompute statistics for recommendations
+df_recommend = pd.read_csv('subsidies_openbaar_subsidieregister.csv')
+df_recommend = df_recommend.dropna(subset=['Bedragaangevraagd', 'Bedragverleend', 'Beleidsterrein', 'Organisatieonderdeel', 'Typeperiodiciteit'])
+df_recommend['Approved'] = (df_recommend['Bedragverleend'] > 0).astype(int)
+
+# Encode categorical variables
+df_recommend['Beleidsterrein'] = label_encoder_policy_area.transform(df_recommend['Beleidsterrein'])
+df_recommend['Organisatieonderdeel'] = label_encoder_organizational_unit.transform(df_recommend['Organisatieonderdeel'])
+df_recommend['Typeperiodiciteit'] = label_encoder_periodicity.transform(df_recommend['Typeperiodiciteit'])
+
+# Precompute approval rates for recommendations
+mean_amount_approved = df_recommend[df_recommend['Approved'] == 1]['Bedragaangevraagd'].mean()
+
+approval_rates_by_policy = df_recommend.groupby('Beleidsterrein')['Approved'].mean()
+top_policies = approval_rates_by_policy.sort_values(ascending=False).head(3).index.tolist()
+
+approval_rates_by_org = df_recommend.groupby('Organisatieonderdeel')['Approved'].mean()
+top_orgs = approval_rates_by_org.sort_values(ascending=False).head(3).index.tolist()
+
+approval_rates_by_periodicity = df_recommend.groupby('Typeperiodiciteit')['Approved'].mean()
+top_periodicities = approval_rates_by_periodicity.sort_values(ascending=False).head(1).index.tolist()
+
+
+@app.callback(
+    [Output("prediction-output", "children"),
+     Output("recommendation-output", "children")],
+    [Input("predict-button", "n_clicks")],
+    [dash.dependencies.State("amount-input", "value"),
+     dash.dependencies.State("policy-dropdown", "value"),
+     dash.dependencies.State("org-dropdown", "value"),
+     dash.dependencies.State("periodicity-dropdown", "value")]
+)
+def predict_subsidy_with_recommendations(n_clicks, amount, policy, org, periodicity):
+    if n_clicks is None:
+        return "", ""
+
+    try:
+        # Check for missing inputs
+        if None in (amount, policy, org, periodicity):
+            return html.Div("Please fill in all input fields."), ""
+
+        # Encode categorical variables
+        policy_encoded = label_encoder_policy_area.transform([policy])[0]
+        org_encoded = label_encoder_organizational_unit.transform([org])[0]
+        periodicity_encoded = label_encoder_periodicity.transform([periodicity])[0]
+
+        # Prepare input data
+        input_data = pd.DataFrame([[amount, policy_encoded, org_encoded, periodicity_encoded]],
+                                  columns=['Bedragaangevraagd', 'Beleidsterrein', 'Organisatieonderdeel',
+                                           'Typeperiodiciteit'])
+
+        # Make a prediction using the model
+        probability = model.predict_proba(input_data)[0][1]
+        probability_percentage = round(probability * 100, 2)
+
+        # Prediction output
+        prediction_result = html.Div([
+            html.H4(f"Prediction Result:"),
+            html.P(f"There is a {probability_percentage}% chance of getting the subsidy.")
+        ])
+
+        # Recommendations (simplified logic here)
+        recommendations = []
+        if amount > mean_amount_approved:
+            recommendations.append(f"Consider reducing the requested amount to improve approval chances.")
+        if policy_encoded not in top_policies:
+            recommendations.append("Consider aligning with higher approval policy areas.")
+
+        recommendation_output = html.Div([
+            html.H4("Recommendations:"),
+            html.Ul([html.Li(rec) for rec in recommendations])
+        ])
+
+        return prediction_result, recommendation_output
+
+    except Exception as e:
+        return html.Div(f"An error occurred: {str(e)}"), ""
 
 
 if __name__ == '__main__':
