@@ -51,6 +51,21 @@ year_options.insert(0, {'label': 'All Years', 'value': 'all'})
 with open('rf_model.pkl', 'rb') as model_file:
     model = pickle.load(model_file)
 
+with open('label_encoder_policy_area.pkl', 'rb') as file:
+    label_encoder_policy_area = pickle.load(file)
+
+with open('label_encoder_organizational_unit.pkl', 'rb') as file:
+    label_encoder_organizational_unit = pickle.load(file)
+
+with open('label_encoder_periodicity.pkl', 'rb') as file:
+    label_encoder_periodicity = pickle.load(file)
+
+
+mean_amount_approved = df['Bedragverleend'].mean()  # You can adjust this
+top_policies = df['Beleidsterrein'].value_counts().nlargest(3).index.tolist()
+top_orgs = df['Organisatieonderdeel'].value_counts().nlargest(3).index.tolist()
+top_periodicities = df['Typeperiodiciteit'].value_counts().nlargest(2).index.tolist()
+
 # Helper functions
 def format_large_number(number):
     if number >= 1_000_000_000:
@@ -239,6 +254,17 @@ dashboard_layout = dbc.Container([
 ], className="p-5")
 
 
+# Prepare dropdown options
+policy_labels = label_encoder_policy_area.classes_
+policy_options = [{'label': label, 'value': label} for label in policy_labels]
+
+org_labels = label_encoder_organizational_unit.classes_
+org_options = [{'label': label, 'value': label} for label in org_labels]
+
+periodicity_labels = label_encoder_periodicity.classes_
+periodicity_options = [{'label': label, 'value': label} for label in periodicity_labels]
+
+
 # Prediction layout
 prediction_layout = dbc.Container([
     html.H1("Subsidy Prediction", className="text-center my-4"),
@@ -255,73 +281,21 @@ prediction_layout = dbc.Container([
                 dbc.Row([
                     dbc.Label("Policy Area", html_for="policy-dropdown", width=4),
                     dbc.Col(
-                        dcc.Dropdown(id="policy-dropdown", options=[
-                            {'label': 'Algemeen', 'value': 0},
-                            {'label': 'Bedrijfsvoering', 'value': 1},
-                            {'label': 'Bestuur en ondersteuning', 'value': 2},
-                            {'label': 'Cultuur', 'value': 3},
-                            {'label': 'Dienstverlening en informatie', 'value': 4},
-                            {'label': 'Diversiteit', 'value': 5},
-                            {'label': 'Economie', 'value': 6},
-                            {'label': 'Inkomen', 'value': 7},
-                            {'label': 'Jeugd', 'value': 8},
-                            {'label': 'Monumenten', 'value': 9},
-                            {'label': 'Onderwijs', 'value': 10},
-                            {'label': 'Openbare orde en veiligheid', 'value': 11},
-                            {'label': 'Ruimte en duurzaamheid', 'value': 12},
-                            {'label': 'Sociaal', 'value': 13},
-                            {'label': 'Sociale basis', 'value': 14},
-                            {'label': 'Sport', 'value': 15},
-                            {'label': 'Stedelijke ontwikkeling en wonen', 'value': 16},
-                            {'label': 'Verkeer en openbare ruimte', 'value': 17},
-                            {'label': 'Werk', 'value': 18},
-                            {'label': 'Zorg', 'value': 19}
-                        ]),
+                        dcc.Dropdown(id="policy-dropdown", options=policy_options),
                         width=8,
                     ),
                 ], className="mb-3"),
                 dbc.Row([
                     dbc.Label("Organizational Unit", html_for="org-dropdown", width=4),
                     dbc.Col(
-                        dcc.Dropdown(id="org-dropdown", options=[
-                            {'label': 'Bestuur en Organisatie', 'value': 0},
-                            {'label': 'Communicatie', 'value': 1},
-                            {'label': 'Economische Zaken', 'value': 2},
-                            {'label': 'Grond en Ontwikkeling', 'value': 3},
-                            {'label': 'Inkomen', 'value': 4},
-                            {'label': 'Kunst en Cultuur', 'value': 5},
-                            {'label': 'Maatschappelijke Voorzieningen', 'value': 6},
-                            {'label': 'Monumenten en Archeologie', 'value': 7},
-                            {'label': 'Onderwijs', 'value': 8},
-                            {'label': 'Jeugd en Zorg', 'value': 9},
-                            {'label': 'Participatie', 'value': 10},
-                            {'label': 'Ruimte en Duurzaamheid', 'value': 11},
-                            {'label': 'Sport en Bos', 'value': 12},
-                            {'label': 'Stadsbeheer en Gebiedsgericht werken', 'value': 13},
-                            {'label': 'Stadsdeel Centrum', 'value': 14},
-                            {'label': 'Stadsdeel Nieuw-West', 'value': 15},
-                            {'label': 'Stadsdeel Noord', 'value': 16},
-                            {'label': 'Stadsdeel Oost', 'value': 17},
-                            {'label': 'Stadsdeel West', 'value': 18},
-                            {'label': 'Stadsdeel Zuid', 'value': 19},
-                            {'label': 'Stadsdeel Zuidoost', 'value': 20},
-                            {'label': 'Stadsdeel Overstijgend', 'value': 21},
-                            {'label': 'Stadsgebied Weesp', 'value': 22},
-                            {'label': 'Verkeer en openbare ruimte', 'value': 23},
-                            {'label': 'Werk', 'value': 24},
-                            {'label': 'Wonen', 'value': 25},
-                            {'label': 'Zuidas', 'value': 26}
-                        ]),
+                        dcc.Dropdown(id="org-dropdown", options=org_options),
                         width=8,
                     ),
                 ], className="mb-3"),
                 dbc.Row([
                     dbc.Label("Periodicity Type", html_for="periodicity-dropdown", width=4),
                     dbc.Col(
-                        dcc.Dropdown(id="periodicity-dropdown", options=[
-                            {"label": "One-time", "value": 0},
-                            {"label": "Book year", "value": 1}
-                        ]),
+                        dcc.Dropdown(id="periodicity-dropdown", options=periodicity_options),
                         width=8,
                     ),
                 ], className="mb-3"),
@@ -329,9 +303,40 @@ prediction_layout = dbc.Container([
             ]),
         ], md=6),
         dbc.Col([
-            html.Div(id="prediction-output", className="mt-4")
+            html.Div(id="prediction-output", className="mt-4"),
+            html.Div(id="recommendation-output", className="mt-4")
         ], md=6),
     ]),
+])
+
+# Precompute statistics for recommendations
+df_recommend = pd.read_csv('subsidies_openbaar_subsidieregister.csv')
+df_recommend = df_recommend.dropna(subset=['Bedragaangevraagd', 'Bedragverleend', 'Beleidsterrein', 'Organisatieonderdeel', 'Typeperiodiciteit'])
+df_recommend['Approved'] = (df_recommend['Bedragverleend'] > 0).astype(int)
+
+# Encode categorical variables
+df_recommend['Beleidsterrein'] = label_encoder_policy_area.transform(df_recommend['Beleidsterrein'])
+df_recommend['Organisatieonderdeel'] = label_encoder_organizational_unit.transform(df_recommend['Organisatieonderdeel'])
+df_recommend['Typeperiodiciteit'] = label_encoder_periodicity.transform(df_recommend['Typeperiodiciteit'])
+
+# Precompute approval rates
+mean_amount_approved = df_recommend[df_recommend['Approved'] == 1]['Bedragaangevraagd'].mean()
+
+approval_rates_by_policy = df_recommend.groupby('Beleidsterrein')['Approved'].mean()
+top_policies = approval_rates_by_policy.sort_values(ascending=False).head(3).index.tolist()
+
+approval_rates_by_org = df_recommend.groupby('Organisatieonderdeel')['Approved'].mean()
+top_orgs = approval_rates_by_org.sort_values(ascending=False).head(3).index.tolist()
+
+approval_rates_by_periodicity = df_recommend.groupby('Typeperiodiciteit')['Approved'].mean()
+top_periodicities = approval_rates_by_periodicity.sort_values(ascending=False).head(1).index.tolist()
+
+app.config.suppress_callback_exceptions = True
+# Main app layout
+app.layout = html.Div([
+    dcc.Location(id="url"),
+    navbar,
+    html.Div(id='page-content')
 ])
 
 # Explore data layout
@@ -787,6 +792,16 @@ def update_map(selected_year):
     return fig
 
 
+# Function to safely encode labels, handling unseen labels
+# Function to safely encode labels, handling unseen labels
+def safe_label_encoder(encoder, value, fallback_value=-1):
+    try:
+        return encoder.transform([value])[0]
+    except ValueError:
+        # Return a fallback value if the value is not recognized by the encoder
+        return fallback_value  # Default to -1 for unseen labels
+
+# Updated prediction function with proper argument handling
 @app.callback(
     Output("prediction-output", "children"),
     [Input("predict-button", "n_clicks")],
@@ -795,30 +810,85 @@ def update_map(selected_year):
      dash.dependencies.State("org-dropdown", "value"),
      dash.dependencies.State("periodicity-dropdown", "value")]
 )
-
-# Prediction function within the Dash framework
-def predict_subsidy(n_clicks, amount, policy, org, periodicity):
+def predict_subsidy_with_recommendations(n_clicks, amount, policy, org, periodicity):
     if n_clicks is None:
-        return ""
+        return "", ""
 
     try:
-        # Prepare input data
-        input_data = pd.DataFrame([[amount, policy, org, periodicity]],
-                                  columns=['Bedragaangevraagd', 'Beleidsterrein', 'Organisatieonderdeel',
-                                           'Typeperiodiciteit'])
+        # Check for missing inputs
+        if None in (amount, policy, org, periodicity):
+            return html.Div("Please fill in all input fields."), ""
+
+        # Safely encode categorical variables, passing only 2 arguments
+        policy_encoded = safe_label_encoder(label_encoder_policy_area, policy)
+        org_encoded = safe_label_encoder(label_encoder_organizational_unit, org)
+        periodicity_encoded = safe_label_encoder(label_encoder_periodicity, periodicity)
+
+        # Check if any encoded value is -1 (indicating an unrecognized label)
+        if -1 in (policy_encoded, org_encoded, periodicity_encoded):
+            # Inform the user about the specific field that caused the issue
+            invalid_fields = []
+            if policy_encoded == -1:
+                invalid_fields.append("Policy Area")
+            if org_encoded == -1:
+                invalid_fields.append("Organizational Unit")
+            if periodicity_encoded == -1:
+                invalid_fields.append("Periodicity Type")
+
+            return html.Div(f"Error: The following input values are not recognized: {', '.join(invalid_fields)}."), ""
+
+        # Prepare input data for prediction
+        input_data = pd.DataFrame([[amount, policy_encoded, org_encoded, periodicity_encoded]],
+                                  columns=['Bedragaangevraagd', 'Beleidsterrein', 'Organisatieonderdeel', 'Typeperiodiciteit'])
 
         # Make a prediction using the model
         probability = model.predict_proba(input_data)[0][1]
         probability_percentage = round(probability * 100, 2)
 
-        # Display the prediction result
-        return html.Div([
+        # Prediction output
+        prediction_result = html.Div([
             html.H4(f"Prediction Result:"),
             html.P(f"There is a {probability_percentage}% chance of getting the subsidy.")
         ])
 
+        # Recommendations
+        recommendations = []
+
+        # For 'Bedragaangevraagd' (Amount Requested)
+        if amount > mean_amount_approved:
+            recommendations.append(f"Consider reducing the requested amount below {mean_amount_approved:.2f} € to increase your chances.")
+
+        # For 'Beleidsterrein' (Policy Area)
+        if policy_encoded not in top_policies:
+            policy_names = label_encoder_policy_area.inverse_transform(top_policies)
+            recommendations.append(f"Consider aligning your proposal with policy areas like {', '.join(policy_names)}.")
+
+        # For 'Organisatieonderdeel' (Organizational Unit)
+        if org_encoded not in top_orgs:
+            org_names = label_encoder_organizational_unit.inverse_transform(top_orgs)
+            recommendations.append(f"Consider collaborating with organizational units like {', '.join(org_names)}.")
+
+        # For 'Typeperiodiciteit' (Periodicity Type)
+        if periodicity_encoded not in top_periodicities:
+            periodicity_names = label_encoder_periodicity.inverse_transform(top_periodicities)
+            recommendations.append(f"Consider changing the periodicity type to {', '.join(periodicity_names)}.")
+
+        # Format recommendations for display
+        if recommendations:
+            recommendation_output = html.Div([
+                html.H4("Recommendations to Improve Your Chances:"),
+                html.Ul([html.Li(rec) for rec in recommendations])
+            ])
+        else:
+            recommendation_output = html.Div([
+                html.H4("No specific recommendations found for improving your prediction.")
+            ])
+
+        return prediction_result, recommendation_output
+
     except Exception as e:
-        return html.Div(f"An error occurred: {str(e)}")
+        return html.Div(f"An error occurred: {str(e)}"), ""
+
 
 if __name__ == '__main__':
     app.run(debug=True)
