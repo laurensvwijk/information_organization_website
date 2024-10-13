@@ -14,7 +14,9 @@ from sklearn.preprocessing import LabelEncoder
 # Load and preprocess data
 df = pd.read_csv('subsidie.csv')
 df = df[df.Bedragaangevraagd != 0]
-df = df.drop(columns=['Publicatiedatumverleningsbesluit', 'Publicatiedatumvaststellingsbesluit'])
+df = df[df.Subsidiejaar != 2013]
+df = df[df.Subsidiejaar != 2014]
+# df = df.drop(columns=['Publicatiedatumverleningsbesluit', 'Publicatiedatumvaststellingsbesluit'])
 df = df.dropna(subset=['Bedragaangevraagd', 'Bedragverleend', 'Bedragvastgesteld'])
 
 # Filter stadsdeel data
@@ -43,7 +45,7 @@ df_sub_per_year['Percentage_verleend'] = (
 # Get unique years
 unique_years = sorted(df['Subsidiejaar'].unique())
 year_options = [{'label': str(year), 'value': year} for year in unique_years]
-year_options.insert(0, {'label': 'Alle Jaren', 'value': 'all'})
+year_options.insert(0, {'label': 'All Years', 'value': 'all'})
 
 # Load the machine learning model
 with open('rf_model.pkl', 'rb') as model_file:
@@ -90,9 +92,9 @@ app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 navbar = dbc.NavbarSimple(
     children=[
         dbc.NavItem(dbc.Button("Home", href="/home", color="light")),
-        dbc.NavItem(dbc.Button("Discover Year", href="/", color="light", style={"margin-left": "10px"})),
+        dbc.NavItem(dbc.Button("Explore per Year", href="/", color="light", style={"margin-left": "10px"})),
         dbc.NavItem(dbc.Button("Subsidy Predictor", href="/predict", color="light", style={"margin-left": "10px"})),
-        dbc.NavItem(dbc.Button("Explore", href="/explore", color="light", style={"margin-left": "10px"}))
+        dbc.NavItem(dbc.Button("The Dataset", href="/explore", color="light", style={"margin-left": "10px"}))
     ],
     brand='Amsterdam Subsidy Dashboard',
     brand_href="#",
@@ -151,12 +153,12 @@ dbc.Card([
                     className="card-title", style={
                 'margin': '0px',
                 'fontSize': '18px',
-                'fontWeight': 'normal',
+                'fontWeight': 'bold',
                 'color': '#000000',
                 'textAlign': 'start',
                 'margin-top': '20px'
             }),
-            html.H4('Filter the Data by Year: Use our filtering tool to view subsidy data from specific years,'
+            html.H4('- Filter the Data by Year: Use our filtering tool to view subsidy data from specific years,'
                     ' helping you track how public funding has changed over time.',
                     className="card-title", style={
                 'margin': '0px',
@@ -166,7 +168,7 @@ dbc.Card([
                 'textAlign': 'start',
                 'margin-top': '10px'
             }),
-            html.H4('Subsidy Predictor: Curious about your chances of receiving a subsidy? '
+            html.H4('- Subsidy Predictor: Curious about your chances of receiving a subsidy? '
                     'Enter your project details into our subsidy predictor to estimate whether your requested amount '
                     'will likely be fully granted, partially approved, or rejected.',
                     className="card-title", style={
@@ -177,7 +179,7 @@ dbc.Card([
                 'textAlign': 'start',
                 'margin-top': '10px'
             }),
-            html.H4('Explore the Data: Dive into the data directly by viewing a detailed table of subsidy requests and grants.',
+            html.H4('- Explore the Data: Dive into the data directly by viewing a detailed table of subsidy requests and grants.',
                     className="card-title", style={
                 'margin': '0px',
                 'fontSize': '18px',
@@ -225,10 +227,17 @@ dashboard_layout = dbc.Container([
     ], align="start", className="mb-4"),
     dbc.Row([
         dbc.Col([html.Div(id='map_title'),
-                 dcc.Graph(id="choropleth-map")], width=8),
-        dbc.Col(['Bar Chart'], width=4),
+                 dcc.Graph(id="choropleth-map")], width=12),
     ]),
+    dbc.Row([dbc.Col([html.Div(id='bar_h_title'),
+                 dcc.Graph(id='bar_right')], width=12),
+    ]),
+
+    dbc.Row([dbc.Col([html.Div(id='trend_title'),
+                      dcc.Graph(id='trend_plot')], width=12),
+             ]),
 ], className="p-5")
+
 
 # Prediction layout
 prediction_layout = dbc.Container([
@@ -433,8 +442,12 @@ def create_top_5_table(selected_year):
 
     df_top5 = df_grouped.sort_values(by='total_bedragverleend', ascending=False).head(6)
     df_top5['total_bedragverleend'] = df_top5['total_bedragverleend'].apply(format_large_number)
+    df_top5 = df_top5.rename(columns={
+        'Aanvrager': 'Requester',
+        'total_bedragverleend': 'Total Amount Granted (€)',
+        'aanvraag_count': 'Number of Requests'
+    })
     table = dbc.Table.from_dataframe(df_top5, striped=True, bordered=True, hover=True)
-
     return table
 
 
@@ -458,6 +471,52 @@ def plot_pie_chart_bedragverleend(selected_year):
     return fig
 
 
+@app.callback(
+    Output('bar_right', 'figure'),
+    [Input('year-selector', 'value')]
+)
+def plot_bar_chart_bedragverleend(selected_year):
+    if selected_year != 'all':
+        df_filtered = df[df['Subsidiejaar'] == selected_year]
+    else:
+        df_filtered = df
+
+    df_grouped = df_filtered.groupby('Regelingnaam').agg(
+        total_bedragverleend=pd.NamedAgg(column='Bedragverleend', aggfunc='sum')
+    ).reset_index()
+
+    top_15_df = df_grouped.sort_values(by='total_bedragverleend', ascending=False).head(10)
+
+
+    fig = px.bar(
+        top_15_df,
+        x='total_bedragverleend',
+        y='Regelingnaam',
+        orientation='h',
+    )
+    fig.update_traces(marker_color='red')
+    fig.update_layout(
+        xaxis_title="Subsidy in €",
+        yaxis_title="Scheme Name")
+    return fig
+
+
+@app.callback(
+    Output('trend_plot', 'figure'),
+    [Input('year-selector', 'value')]
+)
+def plot_trend_year(selected_year):
+    df_grouped = df.groupby('Subsidiejaar').agg(
+        total_bedragverleend=pd.NamedAgg(column='Bedragverleend', aggfunc='sum')
+    ).reset_index()
+    fig = px.line(df_grouped, x="Subsidiejaar", y="total_bedragverleend", markers=True)
+    fig.update_traces(line_color='red', line=dict(width=2))
+    fig.update_layout(
+        xaxis_title="Subsidy Year",
+        yaxis_title="Subsidy in €")
+    return fig
+
+
 # Callback to update the title for Plot X dynamically
 @app.callback(
     Output('pie_title', 'children'),
@@ -465,7 +524,7 @@ def plot_pie_chart_bedragverleend(selected_year):
 )
 def update_barplot_title(selected_year):
     # Generate the dynamic title text
-    title_text = f'Barplot of Year: {selected_year if selected_year != "all" else "All Time"}'
+    title_text = f'Relative Subsidy Distribution Across Sectors in: {selected_year if selected_year != "all" else "All Time"}'
 
     # Return title with question mark and tooltip
     return html.Div([
@@ -499,21 +558,21 @@ def update_barplot_title(selected_year):
 
         # Tooltip for the question mark
         dbc.Tooltip(
-            "This plot shows the top requesters for the selected year. Hover over the plot to explore details.",
+            "This pie chart shows the percentage share of subsidies distributed to each sector."
+            " Hover over a slice to see the sector name and its corresponding percentage of the total subsidy pool.",
             target="tooltip-target",
             placement="top",
         )
     ], style={'text-align': 'center'})  # Center the entire title block
-
 
 # Callback to update the title for Plot X dynamically
 @app.callback(
     Output('table_title', 'children'),
     Input('year-selector', 'value')
 )
-def update_tavle_title(selected_year):
+def update_table_title(selected_year):
     # Generate the dynamic title text
-    title_text = f'Table of Year: {selected_year if selected_year != "all" else "All Time"}'
+    title_text = f'Top 6 Highest Granted Subsidies in: {selected_year if selected_year != "all" else "All Time"}'
 
     # Return title with question mark and tooltip
     return html.Div([
@@ -547,12 +606,11 @@ def update_tavle_title(selected_year):
 
         # Tooltip for the question mark
         dbc.Tooltip(
-            "This plot shows the top requesters for the selected year. Hover over the plot to explore details.",
+            "This table lists the top 6 highest subsidies, the organizations or individuals who requested them, and the number of requests made by each requester.",
             target="tooltip-target",
             placement="top",
         )
     ], style={'text-align': 'center'})  # Center the entire title block
-
 
 # Callback to update the title for Plot X dynamically
 @app.callback(
@@ -561,7 +619,7 @@ def update_tavle_title(selected_year):
 )
 def update_map_title(selected_year):
     # Generate the dynamic title text
-    title_text = f'Maplot of Year: {selected_year if selected_year != "all" else "All Time"}'
+    title_text = f'Relative Funding Across Amsterdams Districts in: {selected_year if selected_year != "all" else "All Time"}'
 
     # Return title with question mark and tooltip
     return html.Div([
@@ -595,19 +653,121 @@ def update_map_title(selected_year):
 
         # Tooltip for the question mark
         dbc.Tooltip(
-            "This plot shows the top requesters for the selected year. Hover over the plot to explore details.",
+            "This map displays the relative funding that different parts of Amsterdam received, using a color scale to show the intensity of funding."
+            " Hover over a zone to see the exact amount of funding granted to that area.",
             target="tooltip-target",
             placement="top",
         )
     ], style={'text-align': 'center'})  # Center the entire title block
 
+@app.callback(
+    Output('bar_h_title', 'children'),
+    Input('year-selector', 'value')
+)
+def update_bar_h_title(selected_year):
+    # Generate the dynamic title text
+    title_text = f'Top Funding Schemes by Total Amount Granted in: {selected_year if selected_year != "all" else "All Time"}'
+
+    # Return title with question mark and tooltip
+    return html.Div([
+        html.Span(title_text, style={
+            'fontSize': '22px',
+            'fontWeight': 'bold',
+            'color': '#000000',
+            'text-align': 'center'
+        }),
+
+        # The question mark icon with a tooltip
+        html.Span(
+            "?",
+            id="tooltip-target",
+            style={
+                "cursor": "pointer",
+                "color": "#ec0000",
+                "fontWeight": "bold",
+                "marginLeft": "10px",  # Space between title and question mark
+                "fontSize": "20px",  # Make the question mark bigger
+                "border": "2px solid #ec0000",  # Circular border
+                "borderRadius": "50%",  # Make the border circular
+                "padding": "0",  # Remove extra padding
+                "width": "30px",  # Set fixed width
+                "height": "30px",  # Set fixed height
+                "lineHeight": "30px",  # Align text vertically
+                "display": "inline-block",  # Ensure inline behavior
+                "textAlign": "center"  # Center the "?" horizontally
+            }
+        ),
+
+        # Tooltip for the question mark
+        dbc.Tooltip(
+            "This bar plot ranks the funding schemes that received the most subsidies. Hover over a bar to see the scheme name and the total amount of funding it received.",
+            target="tooltip-target",
+            placement="top",
+        )
+    ], style={'text-align': 'center'})  # Center the entire title block
+
+@app.callback(
+    Output('trend_title', 'children'),
+    Input('year-selector', 'value')
+)
+def update_trnd_title(selected_year):
+    # Generate the dynamic title text
+    title_text = f'Total Subsidy Granted in Amsterdam Over the Years'
+
+    # Return title with question mark and tooltip
+    return html.Div([
+        html.Span(title_text, style={
+            'fontSize': '22px',
+            'fontWeight': 'bold',
+            'color': '#000000',
+            'text-align': 'center'
+        }),
+
+        # The question mark icon with a tooltip
+        html.Span(
+            "?",
+            id="tooltip-target",
+            style={
+                "cursor": "pointer",
+                "color": "#ec0000",
+                "fontWeight": "bold",
+                "marginLeft": "10px",  # Space between title and question mark
+                "fontSize": "20px",  # Make the question mark bigger
+                "border": "2px solid #ec0000",  # Circular border
+                "borderRadius": "50%",  # Make the border circular
+                "padding": "0",  # Remove extra padding
+                "width": "30px",  # Set fixed width
+                "height": "30px",  # Set fixed height
+                "lineHeight": "30px",  # Align text vertically
+                "display": "inline-block",  # Ensure inline behavior
+                "textAlign": "center"  # Center the "?" horizontally
+            }
+        ),
+
+        # Tooltip for the question mark
+        dbc.Tooltip(
+            "This line chart tracks the total amount of subsidies granted in Amsterdam over time."
+            " Hover over a point to see the year and the total subsidy granted for that year.",
+            target="tooltip-target",
+            placement="top",
+        )
+    ], style={'text-align': 'center'})  # Center the entire title block
 
 @app.callback(
     Output('choropleth-map', 'figure'),
     [Input('year-selector', 'value')]
 )
 def update_map(selected_year):
-    df_filtered = grouped_df[grouped_df['Subsidiejaar'] == selected_year]
+    if selected_year != 'all':
+        df_filtered = grouped_df[grouped_df['Subsidiejaar'] == selected_year]
+    else:
+        df_filtered = grouped_df.groupby(['Stadsdeel']).agg({
+            'Bedragverleend': 'sum',
+            'WKT_LNG_LAT': 'first'
+        }).reset_index()
+
+
+    # df_filtered = grouped_df[grouped_df['Subsidiejaar'] == selected_year]
     df_filtered = df_filtered.set_index('Stadsdeel')
     df_filtered['geometry'] = df_filtered['WKT_LNG_LAT'].apply(wkt.loads)
 
@@ -620,7 +780,9 @@ def update_map(selected_year):
                                center={"lat": 52.357506, "lon": 4.928166}, opacity=0.3, zoom=10)
 
     fig.update_geos(fitbounds="locations")
-    fig.update_layout(height=600)
+    fig.update_layout(height=600, coloraxis_colorbar=dict(
+        title="Total Funding (€)", titleside="top"
+    ))
 
     return fig
 
