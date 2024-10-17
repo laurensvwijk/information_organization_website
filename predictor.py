@@ -8,7 +8,7 @@ from shapely import wkt
 import json
 import pickle
 
-from sklearn.ensemble import RandomForestClassifier  # This should work now
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 
 # Load and preprocess data
@@ -47,7 +47,7 @@ unique_years = sorted(df['Subsidiejaar'].unique())
 year_options = [{'label': str(year), 'value': year} for year in unique_years]
 year_options.insert(0, {'label': 'All Years', 'value': 'all'})
 
-# Load the machine learning model
+# Load the machine learning models
 with open('rf_model.pkl', 'rb') as model_file:
     model = pickle.load(model_file)
 
@@ -254,16 +254,77 @@ dashboard_layout = dbc.Container([
 ], className="p-5")
 
 
-# Prepare dropdown options
 policy_labels = label_encoder_policy_area.classes_
-policy_options = [{'label': label, 'value': label} for label in policy_labels]
+
+# Translations for Policy Areas
+translated_policy_options = {
+    'Algemeen': 'General',
+    'Sociaal': 'Social',
+    'Economie': 'Economy',
+    'Onderwijs': 'Education',
+    'Diversiteit': 'Diversity',
+    'Sport': 'Sports',
+    'Stedelijke ontwikkeling en wonen': 'Urban Development and Housing',
+    'Sociale basis': 'Social Base',
+    'Cultuur': 'Culture',
+    'Ruimte en duurzaamheid': 'Space and Sustainability',
+    'Bestuur en ondersteuning': 'Administration and Support',
+    'Interne Dienstverlening': 'Internal Services',
+    'Zorg': 'Care',
+    'Werk': 'Work',
+    'Inkomen': 'Income',
+    'Bedrijfsvoering': 'Operations',
+    'Dienstverlening en informatie': 'Services and Information',
+    'Jeugd': 'Youth',
+    'Verkeer en openbare ruimte': 'Traffic and Public Space',
+    'Monumenten': 'Monuments',
+    'Openbare orde en veiligheid': 'Public Order and Safety',
+    'Participatie': 'Participation'
+}
+
+policy_options = [{'label': translated_policy_options.get(label, label), 'value': label} for label in policy_labels]
 
 org_labels = label_encoder_organizational_unit.classes_
-org_options = [{'label': label, 'value': label} for label in org_labels]
+
+# Translations for Organizational Units
+translated_org_options = {
+    'Stadsdeel Zuidoost': 'District Southeast',
+    'Stadsdeel Noord': 'District North',
+    'Stadsdeel Oost': 'District East',
+    'Stadsdeel Centrum': 'District Center',
+    'Onderwijs, Jeugd en Zorg': 'Education, Youth, and Care',
+    'Stadsdeel Zuid': 'District South',
+    'Sport en Bos': 'Sports and Forests',
+    'Economische Zaken': 'Economic Affairs',
+    'Wonen': 'Housing',
+    'Kunst en Cultuur': 'Arts and Culture',
+    'Stadsdeel West': 'District West',
+    'Ruimte en Duurzaamheid': 'Space and Sustainability',
+    'Bestuur en Organisatie': 'Administration and Organization',
+    'Stadsdeel Nieuw-West': 'District New West',
+    'Stadsdeeloverstijgend': 'Cross-District',
+    'Communicatie': 'Communication',
+    'Grond en Ontwikkeling': 'Land and Development',
+    'Participatie': 'Participation',
+    'Werk': 'Work',
+    'Stadsbeheer en Gebiedsgericht werken': 'City Management and Area-Oriented Work',
+    'Maatschappelijke Voorzieningen': 'Social Provisions',
+    'Stadsgebied Weesp': 'District Weesp',
+    'Inkomen': 'Income',
+    'Monumenten en Archeologie': 'Monuments and Archaeology',
+    'Verkeer en openbare ruimte': 'Traffic and Public Space',
+    'Zuidas': 'Zuidas'
+}
+
+org_options = [{'label': translated_org_options.get(label, label), 'value': label} for label in org_labels]
+
 
 periodicity_labels = label_encoder_periodicity.classes_
-periodicity_options = [{'label': label, 'value': label} for label in periodicity_labels]
-
+# Restrict periodicity options to only "One Time" and "Periodic"
+periodicity_options = [
+    {'label': 'One Time', 'value': 'Eenmalig'},
+    {'label': 'Periodic', 'value': 'Periodiek'}
+]
 
 # Prediction layout
 prediction_layout = dbc.Container([
@@ -299,7 +360,7 @@ prediction_layout = dbc.Container([
                         width=8,
                     ),
                 ], className="mb-3"),
-                dbc.Button("Predict", color="primary", id="predict-button", className="mt-3"),
+                dbc.Button("Predict", color="danger", id="predict-button", className="mt-3"),
             ]),
         ], md=6),
         dbc.Col([
@@ -792,7 +853,6 @@ def update_map(selected_year):
     return fig
 
 
-# Function to safely encode labels, handling unseen labels
 # Function to safely encode labels, handling unseen labels
 def safe_label_encoder(encoder, value, fallback_value=-1):
     try:
