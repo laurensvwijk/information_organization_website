@@ -17,7 +17,7 @@ df = df[df.Bedragaangevraagd != 0]
 df = df[df.Subsidiejaar != 2013]
 df = df[df.Subsidiejaar != 2014]
 # df = df.drop(columns=['Publicatiedatumverleningsbesluit', 'Publicatiedatumvaststellingsbesluit'])
-df = df.dropna(subset=['Bedragaangevraagd', 'Bedragverleend', 'Bedragvastgesteld'])
+df = df.dropna(subset=['Bedragaangevraagd', 'Bedragverleend'])
 
 # Filter stadsdeel data
 stadsdeel_data = df[df['Organisatieonderdeel'].str.contains('stadsdeel', case=False, na=False) &
@@ -35,7 +35,7 @@ grouped_df = merged_geo_df.groupby(['Subsidiejaar', 'Stadsdeel']).agg({
     'WKT_LNG_LAT': 'first'
 }).reset_index()
 
-# Calculate total per year
+# Calculate total by year
 df_sub_per_year = df.groupby("Subsidiejaar").sum()
 float_cols = df_sub_per_year.select_dtypes(include=['float']).columns
 df_sub_per_year[float_cols] = df_sub_per_year[float_cols].astype(int)
@@ -107,7 +107,7 @@ app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 navbar = dbc.NavbarSimple(
     children=[
         dbc.NavItem(dbc.Button("Home", href="/home", color="light")),
-        dbc.NavItem(dbc.Button("Explore per Year", href="/", color="light", style={"margin-left": "10px"})),
+        dbc.NavItem(dbc.Button("Explore by Year", href="/", color="light", style={"margin-left": "10px"})),
         dbc.NavItem(dbc.Button("Subsidy Predictor", href="/predict", color="light", style={"margin-left": "10px"})),
         dbc.NavItem(dbc.Button("The Dataset", href="/explore", color="light", style={"margin-left": "10px"}))
     ],
@@ -563,7 +563,7 @@ def plot_bar_chart_bedragverleend(selected_year):
     fig.update_traces(marker_color='red')
     fig.update_layout(
         xaxis_title="Subsidy in €",
-        yaxis_title="Scheme Name")
+        yaxis_title="Regulation")
     return fig
 
 
@@ -732,7 +732,7 @@ def update_map_title(selected_year):
 )
 def update_bar_h_title(selected_year):
     # Generate the dynamic title text
-    title_text = f'Top Funding Schemes by Total Amount Granted in: {selected_year if selected_year != "all" else "All Time"}'
+    title_text = f'Top Funding Regulations by Total Amount Granted in: {selected_year if selected_year != "all" else "All Time"}'
 
     # Return title with question mark and tooltip
     return html.Div([
@@ -766,7 +766,7 @@ def update_bar_h_title(selected_year):
 
         # Tooltip for the question mark
         dbc.Tooltip(
-            "This bar plot ranks the funding schemes that received the most subsidies. Hover over a bar to see the scheme name and the total amount of funding it received.",
+            "This bar plot ranks the funding of regulations that received the most subsidies. Hover over a bar to see the scheme name and the total amount of funding it received.",
             target="tooltip-target",
             placement="top",
         )
